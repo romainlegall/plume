@@ -1,0 +1,49 @@
+version: "3.9"
+
+# plume — lecteur de mails Gmail sur Synology.
+#
+# La base de donnees n'est pas declaree ici : elle est partagee avec les autres
+# applications du NAS (gestion_locative, tresor_prive) et tourne dans le
+# conteneur "db" du projet shared-database. On s'y branche par le reseau
+# externe plutot que d'en creer une nouvelle.
+#
+# Volumes : deux dossiers locaux du NAS, jamais un partage SMB.
+#   /volume1/docker/plume/mbox  l'archive Gmail de 10 Go, en lecture seule
+#   /volume1/docker/plume/data  les pieces jointes, ecrites par l'import
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GITHUB_REPO: ${GITHUB_REPO}
+        GITHUB_BRANCH: ${GITHUB_BRANCH}
+        GITHUB_TOKEN: ${GITHUB_TOKEN}
+    container_name: plume
+    environment:
+      RAILS_ENV: production
+      RAILS_LOG_TO_STDOUT: "1"
+      RAILS_LOG_LEVEL: info
+      RAILS_MAX_THREADS: 5
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      RAILS_MASTER_KEY: ${RAILS_MASTER_KEY}
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/plume_production
+      PLUME_DATA_DIR: /data
+      PLUME_OWN_ADDRESSES: ${PLUME_OWN_ADDRESSES}
+    volumes:
+      - bundle_cache:/usr/local/bundle
+      - /volume1/docker/plume/data:/data
+      - /volume1/docker/plume/mbox:/mbox:ro
+    ports:
+      - "3003:3000"
+    networks:
+      - shared-database_default
+    restart: unless-stopped
+
+networks:
+  shared-database_default:
+    external: true
+
+volumes:
+  bundle_cache:

@@ -1,0 +1,34 @@
+<nav class="hidden w-60 shrink-0 flex-col border-r border-stone-200 bg-white md:flex">
+  <div class="flex-1 overflow-y-auto p-3">
+    <ul class="space-y-0.5">
+      <% sidebar_labels.each do |entry| %>
+        <%
+          active = entry.slug == current_label_slug
+        %>
+        <li>
+          <%= link_to label_conversations_path(slug: entry.slug),
+                class: class_names(
+                  "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm",
+                  active ? "bg-stone-900 font-medium text-white" : "text-stone-700 hover:bg-stone-100"
+                ) do %>
+            <span class="size-2 shrink-0 rounded-full <%= entry.system ? "bg-current opacity-40" : "bg-stone-300" %>"></span>
+            <span class="min-w-0 flex-1 truncate"><%= entry.name %></span>
+            <% if entry.unread.positive? %>
+              <span class="rounded-full px-1.5 py-0.5 text-[11px] font-semibold <%= active ? "bg-white/20 text-white" : "bg-stone-200 text-stone-700" %>">
+                <%= entry.unread %>
+              </span>
+            <% elsif entry.total.positive? %>
+              <span class="text-xs <%= active ? "text-white/60" : "text-stone-400" %>"><%= entry.total %></span>
+            <% end %>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+  </div>
+
+  <div class="border-t border-stone-200 p-3 text-xs text-stone-400">
+    <%= pluralize Conversation.count, "conversation" %>
+    &middot;
+    <%= pluralize Message.count, "message" %>
+  </div>
+</nav>

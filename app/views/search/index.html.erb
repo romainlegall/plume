@@ -1,0 +1,47 @@
+<% content_for :title, @query.present? ? "Recherche : #{@query}" : "Recherche" %>
+
+<section class="flex min-w-0 flex-1 flex-col bg-white">
+  <header class="border-b border-stone-200 px-4 py-2">
+    <h1 class="truncate text-sm font-semibold">
+      <% if @query.present? %>
+        <%= pluralize(@pagy&.count || 0, "resultat") %> pour « <%= @query %> »
+      <% else %>
+        Recherche
+      <% end %>
+    </h1>
+  </header>
+
+  <% if @query.blank? %>
+    <p class="p-8 text-center text-sm text-stone-400">
+      Saisissez un mot cle dans la barre de recherche.
+      La syntaxe accepte <code class="rounded bg-stone-100 px-1">"expression exacte"</code>
+      et <code class="rounded bg-stone-100 px-1">-exclusion</code>.
+    </p>
+  <% elsif @messages.empty? %>
+    <p class="p-8 text-center text-sm text-stone-400">Aucun message ne correspond.</p>
+  <% else %>
+    <ul class="min-h-0 flex-1 overflow-y-auto divide-y divide-stone-100">
+      <% @messages.each do |message| %>
+        <li>
+          <%= link_to conversation_path(message.conversation_id, anchor: "message-#{message.id}"),
+                class: "block px-4 py-3 hover:bg-stone-50" do %>
+            <div class="flex items-baseline gap-2">
+              <span class="min-w-0 flex-1 truncate text-sm font-medium"><%= message.sender_label %></span>
+              <time class="shrink-0 text-xs text-stone-400"><%= l(message.sent_at, format: :short) if message.sent_at %></time>
+            </div>
+            <p class="truncate text-sm text-stone-700"><%= message.subject %></p>
+            <% if message.try(:highlight).present? %>
+              <p class="mt-0.5 line-clamp-2 text-xs text-stone-500">
+                <%= sanitize(message.highlight, tags: %w[mark], attributes: []) %>
+              </p>
+            <% elsif message.snippet.present? %>
+              <p class="mt-0.5 truncate text-xs text-stone-500"><%= message.snippet %></p>
+            <% end %>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+
+    <%= render "shared/pagination", pagy: @pagy %>
+  <% end %>
+</section>

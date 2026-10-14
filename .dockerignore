@@ -1,0 +1,10 @@
+# Fichiers locaux et donnees qui ne doivent jamais aller dans git
+/data
+.env
+*.mbox
+log/*
+tmp/*
+storage/*
+!log/.keep
+!tmp/.keep
+!storage/.keep

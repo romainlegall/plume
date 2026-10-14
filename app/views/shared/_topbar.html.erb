@@ -1,0 +1,17 @@
+<header class="flex items-center gap-3 border-b border-stone-200 bg-white px-4 py-2">
+  <%= link_to root_path, class: "flex items-center gap-2 font-semibold text-stone-900" do %>
+    <span class="grid size-7 place-items-center rounded bg-stone-900 text-sm font-bold text-white">p</span>
+    <span class="hidden sm:inline">plume</span>
+  <% end %>
+
+  <%= form_with url: search_path, method: :get, class: "min-w-0 flex-1 max-w-2xl" do |form| %>
+    <%= form.search_field :q,
+          value: params[:q],
+          placeholder: "Rechercher dans les messages",
+          class: "w-full rounded-md border border-stone-300 bg-stone-50 px-3 py-1.5 text-sm placeholder:text-stone-400 focus:border-stone-500 focus:bg-white focus:outline-none" %>
+  <% end %>
+
+  <% if Conversation.count.zero? %>
+    <span class="ml-auto text-xs text-stone-500">aucune archive importee</span>
+  <% end %>
+</header>

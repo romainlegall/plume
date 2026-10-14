@@ -1,0 +1,19 @@
+<% if pagy.last > 1 %>
+  <nav class="flex items-center justify-between border-t border-stone-200 px-4 py-2 text-xs text-stone-500">
+    <% if pagy.prev %>
+      <%= link_to "< Precedent", url_for(request.query_parameters.merge(page: pagy.prev)),
+            class: "rounded border border-stone-300 px-2 py-1 hover:bg-stone-50" %>
+    <% else %>
+      <span></span>
+    <% end %>
+
+    <span>Page <%= pagy.page %> sur <%= pagy.last %> (<%= number_with_delimiter pagy.count %> messages)</span>
+
+    <% if pagy.next %>
+      <%= link_to "Suivant >", url_for(request.query_parameters.merge(page: pagy.next)),
+            class: "rounded border border-stone-300 px-2 py-1 hover:bg-stone-50" %>
+    <% else %>
+      <span></span>
+    <% end %>
+  </nav>
+<% end %>

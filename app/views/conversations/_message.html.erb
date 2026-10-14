@@ -1,0 +1,71 @@
+<article class="rounded-lg border border-stone-200 bg-white shadow-sm">
+  <header class="flex items-start gap-3 border-b border-stone-100 px-4 py-3">
+    <span class="grid size-9 shrink-0 place-items-center rounded-full bg-stone-200 text-sm font-semibold text-stone-600">
+      <%= initials(message.sender_label) %>
+    </span>
+
+    <div class="min-w-0 flex-1">
+      <div class="flex items-baseline gap-2">
+        <span class="min-w-0 flex-1 truncate text-sm font-semibold"><%= message.sender_label %></span>
+        <time class="shrink-0 text-xs text-stone-400" datetime="<%= message.sent_at&.iso8601 %>">
+          <%= l(message.sent_at, format: :long) %>
+        </time>
+      </div>
+      <p class="truncate text-xs text-stone-500">A : <%= truncate(message.recipients, length: 140) %></p>
+    </div>
+
+    <%= button_to toggle_message_star_path(message), method: :post,
+          params: { return_to: conversation_path(@conversation) },
+          class: "shrink-0 rounded p-1 text-lg leading-none hover:bg-stone-100",
+          title: message.is_starred? ? "Ne plus suivre" : "Suivre",
+          "aria-label": message.is_starred? ? "Ne plus suivre" : "Suivre" do %>
+      <span class="<%= "text-amber-500" if message.is_starred? %>"><%= "★" %></span>
+    <% end %>
+  </header>
+
+  <div class="px-4 py-3">
+    <% blocked = remote_image_count(message) %>
+    <div data-controller="remote-images">
+      <% if blocked.positive? %>
+        <button type="button"
+                data-remote-images-target="button"
+                data-action="remote-images#reveal"
+                class="load-remote mb-2">
+          Charger <%= pluralize blocked, "image distante" %>
+        </button>
+      <% end %>
+
+      <div data-remote-images-target="container">
+        <% if message.body_html.present? %>
+          <div class="email-body text-sm leading-relaxed text-stone-800"><%= sanitized_email_html(message) %></div>
+        <% elsif message.body_text.present? %>
+          <div class="whitespace-pre-wrap text-sm leading-relaxed text-stone-800"><%= message.body_text %></div>
+        <% else %>
+          <p class="text-sm italic text-stone-400">Ce message n'a pas de contenu texte.</p>
+        <% end %>
+      </div>
+    </div>
+  </div>
+
+  <% if message.regular_attachments.any? %>
+    <footer class="border-t border-stone-100 px-4 py-3">
+      <p class="mb-2 text-xs font-medium text-stone-500">
+        <%= pluralize message.regular_attachments.size, "piece jointe" %>
+      </p>
+      <ul class="flex flex-wrap gap-2">
+        <% message.regular_attachments.each do |attachment| %>
+          <li>
+            <%= link_to attachment_path(attachment),
+                  class: "flex items-center gap-2 rounded-md border border-stone-300 px-2.5 py-1.5 text-xs hover:bg-stone-50" do %>
+              <span class="grid size-7 shrink-0 place-items-center rounded bg-stone-100 text-[10px] font-bold uppercase text-stone-600">
+                <%= File.extname(attachment.filename.to_s).delete(".").presence || "?" %>
+              </span>
+              <span class="max-w-40 truncate"><%= attachment.display_name %></span>
+              <span class="text-stone-400"><%= attachment.human_size %></span>
+            <% end %>
+          </li>
+        <% end %>
+      </ul>
+    </footer>
+  <% end %>
+</article>

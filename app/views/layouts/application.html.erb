@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+  <head>
+    <title><%= content_for(:title) || "plume" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%= stylesheet_link_tag "tailwind" %>
+    <%= javascript_importmap_tags %>
+  </head>
+
+  <body class="h-full bg-stone-100 text-stone-900 antialiased">
+    <div class="flex h-full flex-col">
+      <%= render "shared/topbar" %>
+
+      <div class="flex min-h-0 flex-1">
+        <%= render "shared/sidebar" %>
+
+        <div class="flex min-w-0 flex-1 flex-col">
+          <%= render "shared/mobile_nav" %>
+          <div class="flex min-h-0 flex-1">
+            <%= yield %>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

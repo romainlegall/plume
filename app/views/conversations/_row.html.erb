@@ -1,0 +1,39 @@
+<% last = conversation.messages.max_by(&:sent_at) %>
+<%
+  unread = conversation.unread_count.positive?
+  pieces = conversation.messages.sum { |m| m.attachment_count }
+%>
+
+<li class="border-b border-stone-100">
+  <%= link_to conversation_path(conversation),
+        class: class_names(
+          "block px-4 py-3 transition hover:bg-stone-50",
+          unread ? "bg-white" : "bg-stone-50/60"
+        ) do %>
+
+    <div class="flex items-baseline gap-2">
+      <span class="min-w-0 flex-1 truncate text-sm <%= unread ? "font-semibold text-stone-900" : "font-medium text-stone-700" %>">
+        <%= conversation.participant_summary %>
+      </span>
+      <time class="shrink-0 text-xs text-stone-400" datetime="<%= conversation.latest_at&.iso8601 %>">
+        <%= l(conversation.latest_at, format: :short) %>
+      </time>
+    </div>
+
+    <div class="mt-0.5 flex items-center gap-2">
+      <span class="min-w-0 flex-1 truncate text-sm <%= unread ? "font-medium" : "text-stone-600" %>">
+        <%= conversation.subject %>
+      </span>
+      <% if conversation.is_starred? %>
+        <span class="shrink-0 text-amber-500" title="Suivi">&#9733;</span>
+      <% end %>
+      <% if pieces.positive? %>
+        <span class="shrink-0 text-xs text-stone-400" title="<%= pluralize pieces, "piece jointe" %>">&#128206;</span>
+      <% end %>
+    </div>
+
+    <% if last&.snippet.present? %>
+      <p class="mt-0.5 truncate text-xs text-stone-500"><%= last.snippet %></p>
+    <% end %>
+  <% end %>
+</li>

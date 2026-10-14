@@ -1,0 +1,21 @@
+<nav class="w-full shrink-0 overflow-x-auto border-b border-stone-200 bg-white px-3 py-2 md:hidden">
+  <ul class="flex gap-1.5 whitespace-nowrap">
+    <% sidebar_labels.first(8).each do |entry| %>
+      <%
+        active = entry.slug == current_label_slug
+      %>
+      <li>
+        <%= link_to label_conversations_path(slug: entry.slug),
+              class: class_names(
+                "rounded-full px-3 py-1 text-xs",
+                active ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-700"
+              ) do %>
+          <%= entry.name %>
+          <% if entry.unread.positive? %>
+            <span class="ml-1 opacity-70"><%= entry.unread %></span>
+          <% end %>
+        <% end %>
+      </li>
+    <% end %>
+  </ul>
+</nav>

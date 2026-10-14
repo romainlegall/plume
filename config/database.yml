@@ -1,0 +1,26 @@
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  host: <%= ENV.fetch("PLUME_DB_HOST", "192.168.1.30") %>
+  port: <%= ENV.fetch("PLUME_DB_PORT", 5434) %>
+  username: <%= ENV.fetch("PLUME_DB_USER", "postgres") %>
+  password: <%= ENV.fetch("PLUME_DB_PASSWORD", "postgres") %>
+  variables:
+    statement_timeout: <%= ENV.fetch("PLUME_DB_STATEMENT_TIMEOUT", 60_000) %>
+
+development:
+  <<: *default
+  database: <%= ENV.fetch("PLUME_DB_NAME", "plume_development") %>
+
+test:
+  <<: *default
+  database: plume_test
+
+# En production, sur le NAS, DATABASE_URL est fourni par le compose et pointe
+# vers le conteneur "db" du reseau partage. Il prime sur les variables
+# ci-dessus, qui servent au developpement local.
+production:
+  <<: *default
+  url: <%= ENV["DATABASE_URL"] %>
+  database: <%= ENV.fetch("PLUME_DB_NAME", "plume_production") %>
