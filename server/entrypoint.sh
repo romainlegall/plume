@@ -7,9 +7,20 @@ export DISABLE_SPRING=1
 # plutot que de laisser le conteneur echouer.
 echo "Attente de PostgreSQL..."
 
-DB_HOST="db"
-DB_PORT="5432"
-DB_USER="postgres"
+# DATABASE_URL fait foi. A defaut, on retombe sur le conteneur "db" du reseau
+# partage du NAS, ce qui est le cas normal en production.
+DB_HOST="${DATABASE_HOST:-db}"
+DB_PORT="${DATABASE_PORT:-5432}"
+DB_USER="${POSTGRES_USER:-postgres}"
+
+if [ -n "${DATABASE_URL:-}" ]; then
+    # postgresql://utilisateur:motdepasse@hote:port/base
+    DB_HOST=$(printf '%s' "$DATABASE_URL" | sed -E 's#^[^:]+://##; s#^([^@]*@)?##; s#/.*$##; s#^([^:]*)(:([0-9]+))?$#\1#')
+    DB_PORT=$(printf '%s' "$DATABASE_URL" | sed -E 's#^[^:]+://##; s#^[^@]*@##; s#/.*$##; s#^.*:([0-9]+)$#\1#')
+    DB_USER=$(printf '%s' "$DATABASE_URL" | sed -E 's#^[^:]+://##; s#^([^:]*):.*$#\1#')
+    echo "Configuration lue depuis DATABASE_URL ($DB_USER@$DB_HOST:$DB_PORT)"
+fi
+
 MAX_TRIES=30
 COUNT=0
 
@@ -27,11 +38,8 @@ echo "PostgreSQL repond."
 
 rm -f /app/tmp/pids/server.pid
 
-echo "Creation de la base si necessaire..."
-bundle exec rails db:create 2>&1 | grep -v "^--" || true
-
 echo "Application des migrations..."
-bundle exec rails db:migrate
+bundle exec rails db:prepare
 
 echo "Demarrage de l'application..."
 exec "$@"

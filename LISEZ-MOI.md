@@ -1,206 +1,158 @@
-# plume — déploiement sur le NAS
+# plume — mise en oeuvre sur le NAS
 
-Lecteur de mails Gmail construit sur l'export Takeout (`.mbox`). Ce document
-décrit l'installation manuelle sur le Synology, via Container Manager.
+Lecteur de mails Gmail construit sur l'export Takeout (`.mbox`).
+
+Même organisation que `gestion_locative` : le code vit dans un dépôt Git, le NAS
+ne porte que la configuration de déploiement et les données.
 
 ---
 
-## Ce qu'il faut avant de commencer
+## Où sont les choses
 
-| Prérequis | Pourquoi |
+| Sur votre Mac | Sur le NAS |
 |---|---|
-| Container Manager (Docker) actif sur le NAS | héberge le conteneur `web` |
-| `/volume1/plume/mbox/emails.mbox` (10 Go) | archive source de l'import |
-| `/volume1/plume/data` | stockage des pièces jointes |
-| Accès à la base PostgreSQL existante (192.168.1.30:5434) | messages et index |
+| `~/Perso/04 - Developements/plume` (le code) | `/volume1/docker/plume/server/` |
+| dépôt GitHub | `/volume1/docker/plume/mbox/emails.mbox` |
+| | `/volume1/docker/plume/data/` (pièces jointes) |
+| | `/volume1/docker/plume/config/master.key` |
 
-La base **n'est pas installée par ce projet**. PostgreSQL tourne déjà sur le NAS
-et héberge d'autres applications ; plume s'y connecte simplement.
-
-> **Les volumes doivent être des dossiers locaux du NAS.** Jamais un partage SMB.
-> PostgreSQL refuse un système de fichiers réseau, et le stockage des pièces
-> jointes s'est déjà révélé fragile sur du matériel exFAT.
+L'image Docker **clone le code depuis GitHub** pendant la construction. Le NAS
+n'a donc pas besoin du code applicatif, seulement de `server/`.
 
 ---
 
-## 1. Préparer les dossiers
+## Étape 1 — Créer le dépôt GitHub (seule chose à faire de votre côté)
+
+L'accès GitHub n'est pas configuré sur cette machine : ni GitHub CLI, ni clé
+SSH, ni jeton valide. Le commit est donc prêt en local mais pas poussé.
+
+Créez un dépôt **privé** sur github.com, nommé `plume`, puis :
 
 ```bash
-mkdir -p /volume1/plume/mbox
-mkdir -p /volume1/plume/data
+cd ~/Perso/04\ -\ Developements/plume
+git remote add origin git@github.com:romainlegall/plume.git
+git push -u origin main
 ```
 
-Copier ensuite l'archive dans `/volume1/plume/mbox/`. L'import lit ce fichier ;
-rien d'autre n'est nécessaire.
+Si vous préférez passer par HTTPS, utilisez un jeton GitHub comme mot de passe.
 
----
+## Étape 2 — Renseigner le jeton de lecture
 
-## 2. Déposer l'application
+La construction clone un dépôt privé : GitHub exige un jeton.
 
-Copier le dossier `plume/` dans `/volume1/plume/app` (ou un autre emplacement de
-votre choix).
-
-Deux fichiers sont propres au NAS et **ne doivent pas être versionnés** :
-
-- `docker-compose.yml` (les chemins de volumes y sont des chemins NAS)
-- `.env` (les identifiants y figurent)
-
----
-
-## 3. Créer le fichier `.env`
-
-À partir de `.env.example` :
+Créez un jeton **fine-grained**, portée limitée au dépôt `plume`, permission
+**lecture seule du contenu**, puis sur le NAS :
 
 ```bash
-cd /volume1/plume/app
-cp .env.example .env
+nano /volume1/docker/plume/server/env.production
+# GITHUB_TOKEN=ghp_xxxxxxxxxxxx
 ```
 
-Puis remplir :
+Si vous préférez un dépôt public, videz simplement cette variable.
 
-```ini
-# openssl rand -hex 64
-SECRET_KEY_BASE=<une valeur longue et aleatoire>
-
-PLUME_DB_HOST=192.168.1.30
-PLUME_DB_PORT=5434
-PLUME_DB_USER=postgres
-PLUME_DB_PASSWORD=<votre mot de passe>
-PLUME_DB_NAME=plume_production
-```
-
-`SECRET_KEY_BASE` et `PLUME_DB_PASSWORD` n'ont pas de valeur par défaut : le
-conteneur refuse volontairement de démarrer sans elles.
-
----
-
-## 4. Créer la base
-
-Une seule fois, depuis n'importe quel poste disposant de `psql` :
+## Étape 3 — Vérifier les dossiers de données
 
 ```bash
-psql "postgresql://postgres:postgres@192.168.1.30:5434/postgres" \
-     -c "CREATE DATABASE plume_production;"
+bash /volume1/docker/plume/server/check_storage.sh
 ```
 
----
+Contrôle que `mbox/` et `data/` existent, qu'ils sont accessibles en écriture et
+que l'archive a bien la taille attendue. **Déjà fait** au moment de la
+préparation : 50 256 messages comptés, taille conforme.
 
-## 5. Construire et démarrer
-
-Dans Container Manager → **Projet** → **Créer**, indiquer le dossier
-`/volume1/plume/app` comme chemin du projet. Container Manager détecte le
-`docker-compose.yml` et construit l'image.
-
-La construction prend **5 à 15 minutes** : les gems sont compilés sur le
-processeur du Synology. Les couches sont mises en cache, les reconstructions
-suivantes sont bien plus rapides.
-
-Une fois le projet démarré, plume répond sur `http://<ip-du-nas>:3000`.
-
----
-
-## 6. Lancer l'import
-
-L'import lit 10 Go et écrit environ 2,6 Go de texte plus 4,8 Go de pièces
-jointes. Sur le processeur d'un Synology, comptez **45 minutes à 2 heures**.
-
-Dans Container Manager → projet `plume` → **Terminal** du conteneur :
+## Étape 4 — Créer la base
 
 ```bash
-MBOX=/data/../mbox/emails.mbox \
-PLUME_OWN_ADDRESSES="legall.romain@gmail.com" \
-  bin/rails mail:import
+docker exec shared_postgres_db createdb -U postgres plume_production
 ```
 
-Si l'archive vit dans un dossier monté, ajustez le chemin. La progression
-s'affiche en continu :
+Déjà fait également lors de la préparation.
 
-```
-  messages  importes    spam  pieces     msg/s  ecoule
-    5000       3980     231    1244     12.4    403s
-```
+## Étape 5 — Déployer
 
-`PLUME_OWN_ADDRESSES` sert à identifier les messages envoyés : indiquez vos
-adresses séparées par des virgules.
-
-### Reprendre après une interruption
-
-Si le NAS s'est arrêté en cours de route, rien n'est perdu. Relancez en
-indiquant le nombre de messages déjà traités :
+En SSH sur le NAS :
 
 ```bash
-MBOX=/volume1/plume/mbox/emails.mbox SKIP=12400 bin/rails mail:import
+cd /volume1/docker/plume
+docker-compose --env-file ./server/env.production -f ./server/docker-compose.yml build --no-cache
+docker-compose --env-file ./server/env.production -f ./server/docker-compose.yml up -d
 ```
 
-### Repartir de zéro
+Ou, une fois le depot clone sur le NAS :
 
 ```bash
-bin/rails mail:reset
+./server/deploy.sh
 ```
 
-Demande une confirmation interactive, puis efface messages, conversations,
-étiquettes et les fichiers de pièces jointes.
+L'application répond alors sur `http://<ip-du-nas>:3003`.
 
 ---
 
-## 7. Vérifier
+## Lancer l'import
+
+Première opération seulement, dans le conteneur :
 
 ```bash
-docker compose exec web bin/rails runner "puts Conversation.count"
+docker exec -it plume sh -c 'MBOX=/mbox/emails.mbox PLUME_OWN_ADDRESSES=legall.romain@gmail.com bin/rails mail:import'
 ```
 
-Si le chiffre correspond à l'archive, l'application affiche les conversations.
-Vérifiez que les pièces jointes s'ouvrent : elles sont servies depuis
-`/data`.
+Lecture des 10 Go, écriture d'environ 2,6 Go de texte et 4,8 Go de pièces
+jointes. Comptez **45 minutes à 2 heures** sur le processeur du Synology ; la
+progression s'affiche en continu.
 
----
-
-## Maintenance
-
-**Mettre à jour l'application.** Re-déposer le dossier, puis dans Container
-Manager reconstruire le projet. Les données vivent dans la base et dans
-`/volume1/plume/data`, jamais dans l'image.
-
-**Sauvegardes.** Deux éléments à sauvegarder, et rien d'autre :
+Reprendre après une coupure :
 
 ```bash
-pg_dump "postgresql://postgres:...@192.168.1.30:5434/plume_production" > plume.sql
-tar czf plume-data.tar.gz -C /volume1/plume data
-```
-
-**Les pièces jointes peuvent être reconstruites** depuis le `.mbox` si elles
-sont perdues : `bin/rails mail:import` les réécrit. Il faut donc conserver le
-`.mbox` tant que la base et `/volume1/plume/data` ne sont pas sauvegardées.
-
----
-
-## Réglages utiles
-
-| Variable | Rôle | Défaut |
-|---|---|---|
-| `PLUME_DATA_DIR` | répertoire des pièces jointes | `/data` |
-| `PLUME_OWN_ADDRESSES` | adresses utilisées pour détecter les messages envoyés | vide |
-| `SKIP` | reprise d'import | `0` |
-| `LIMIT` | nombre de messages à importer | tous |
-
-Dans `docker-compose.yml`, adaptez la publication de port si le 3000 est déjà
-pris sur le NAS :
-
-```yaml
-ports:
-  - "8080:3000"
+docker exec -it plume sh -c 'MBOX=/mbox/emails.mbox SKIP=12400 bin/rails mail:import'
 ```
 
 ---
 
-## Dépannage
+## Mises à jour ensuite
 
-| Symptôme | Cause probable |
-|---|---|
-| `SECRET_KEY_BASE` manquant au démarrage | `.env` incomplet ou non lu au bon endroit |
-| `could not translate host name` | `PLUME_DB_HOST` injoignable depuis le conteneur ; vérifier l'IP du NAS |
-| `access method "trigram" does not exist` | migration 20261014000000 non appliquée |
-| Page vide alors que l'import a réussi | vérifier que le chemin de l'archive est bien un dossier local |
-| Pièces jointes « introuvables sur le disque » | `PLUME_DATA_DIR` ne correspond pas au volume monté |
+Le NAS peut surveiller le dépôt et redéployer tout seul. Dans **Planificateur de
+tâches** du Synology, une tâche qui s'exécute toutes les heures :
 
-Les journaux du conteneur sont dans Container Manager → projet → **Journaux**.
+```bash
+/volume1/docker/plume/server/check_updates.sh
+```
+
+Le script compare la révision locale à celle de GitHub et lance `deploy.sh`
+seulement s'il y a du nouveau. Il faut d'abord cloner le dépôt sur le NAS :
+
+```bash
+cd /volume1/docker/plume
+git clone git@github.com:romainlegall/plume.git repo
+```
+
+`deploy.sh` s'attend à trouver le dépôt à la racine de `/volume1/docker/plume` ;
+adaptez `REPO_DIR` si vous le clonez dans un sous-dossier.
+
+---
+
+## À savoir
+
+**Le port.** `plume` occupe le port 3003. `gestion_locative` utilise 3002.
+
+**La base est partagée.** `plume_production` vit dans le conteneur
+`shared_postgres_db`, aux côtés de `gestion_locative_production` et
+`tresor_prive_production`. Une migration ou un `docker compose down` mal ciblé
+toucherait les trois.
+
+**La construction est lente.** Le Synology recompile tous les gems à chaque
+build avec `--no-cache`. Prévoir 5 à 15 minutes. Sans `--no-cache`, c'est bien
+plus rapide mais les changements de Gemfile ne sont pas pris en compte.
+
+**Les données sont hors du dépôt.** `mbox/` et `data/` sont montés en volume et
+ignorés par Git. `deploy.sh` ne les touche jamais.
+
+**Sauvegarde.** Deux éléments seulement :
+
+```bash
+pg_dump "postgresql://postgres:postgres@db:5432/plume_production" > plume.sql
+tar czf plume-data.tar.gz -C /volume1/docker/plume/data .
+```
+
+Les pièces jointes peuvent être reconstruites depuis le `.mbox`, mais la
+reconstruction demande l'archive complète : conservez-la tant que la base et
+`data/` ne sont pas sauvegardés.
