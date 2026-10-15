@@ -12,10 +12,11 @@ module MboxImport
     ENVELOPE_PREFIX = "From "
     CHUNK_SIZE = 16 * 1024 * 1024
     COMPACT_THRESHOLD = 1024 * 1024
-    # Fenetre de recherche de la ligne vide qui clot les en-tetes. Aucun
-    # en-tete d'archive Gmail n'approche cette taille, et la borner evite de
-    # parcourir le reste du fichier pour chaque message.
-    HEADER_WINDOW = 64 * 1024
+    # Presque tous les en-tetes tiennent dans 8 Ko. Les rebonds automatiques
+    # (PostageApp et consorts) en produisent parfois plusieurs dizaines de
+    # kilo-octets : une seconde fenetre, plus large, les rattrape.
+    HEADER_WINDOW = 8 * 1024
+    HEADER_WINDOW_LARGE = 512 * 1024
 
     def initialize(path, chunk_size: CHUNK_SIZE)
       @path = Pathname.new(path).expand_path
@@ -56,12 +57,11 @@ module MboxImport
 
           header_end = header_end(buffer, start)
           if header_end.nil?
-            if eof
-              pos = start + ENVELOPE_PREFIX.bytesize
-              next
-            end
-            pos = start
-            next
+            # Aucune fin d en-tetes, meme dans la fenetre large. Plutot que
+            # d abandonner ce message, on le livre entierement jusqu au
+            # separateur suivant : un message perdu pese plus lourd qu un
+            # message mal analyse.
+            header_end = start
           end
 
           buffer, eof = fill_until_separator(file, buffer, header_end, eof)
@@ -93,16 +93,22 @@ module MboxImport
       end
     end
 
+    # Position de la ligne vide qui clot les en-tetes, ou nil si introuvable.
+    # Deux fenetres sont essayees pour ne pas copier 512 Ko a chaque message.
     def header_end(buffer, start)
-      window = buffer.byteslice(start, HEADER_WINDOW) || +""
-      crlf = window.index("\r\n\r\n")
-      lf = window.index("\n\n")
-      offset = if crlf && (lf.nil? || crlf < lf)
-        crlf
-      else
-        lf
+      [ HEADER_WINDOW, HEADER_WINDOW_LARGE ].each do |taille|
+        window = buffer.byteslice(start, taille) || +""
+        crlf = window.index("\r\n\r\n")
+        lf = window.index("\n\n")
+        offset = if crlf && (lf.nil? || crlf < lf)
+          crlf
+        else
+          lf
+        end
+        return start + offset if offset
       end
-      offset.nil? ? nil : start + offset
+
+      nil
     end
 
     # Garantit que le message complet est dans le tampon avant de le rendre :

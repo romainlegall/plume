@@ -3,7 +3,8 @@ namespace :mail do
   task import: :environment do
     path = ENV["MBOX"].presence || ARGV[0]
     skip = (ENV["SKIP"] || ARGV[1] || 0).to_i
-    limit = (ENV["LIMIT"] || ARGV[2]).presence&.to_i
+    # 0 ou une chaine vide signifie "aucune limite" : on normalise a nil.
+    limit = (ENV["LIMIT"] || ARGV[2]).to_i.presence
 
     if path.blank?
       abort "Usage : MBOX=/chemin/emails.mbox bin/rails mail:import"

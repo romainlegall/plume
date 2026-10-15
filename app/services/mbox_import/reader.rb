@@ -25,13 +25,19 @@ module MboxImport
     def each_message
       reader = MboxReader.new(@path)
       index = 0
+      # 0 doit signifier "aucune limite". En Ruby 0 est vrai : sans cette
+      # conversion, la boucle s'arreterait sur le premier message.
+      max = @limit.to_i
 
       reader.each_raw_message do |raw|
         index += 1
         next if index <= @skip
 
+        # Le test d'arret precede le rendement : sans cela la limite lecture un
+        # message de trop (5 demandes, 6 lus).
+        break if max.positive? && (index - @skip) > max
+
         yield parse(raw), index if block_given?
-        break if @limit && index >= @skip + @limit
       end
     end
 
