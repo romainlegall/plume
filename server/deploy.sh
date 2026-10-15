@@ -39,18 +39,28 @@ if ! charger_env; then
 fi
 
 GIT=$(trouver_git)
+
+# Le git de l'hote n'est pas necessaire pour deployer : la construction de
+# l'image s'appuie sur le git installe DANS l'image, qui clone le depot. Il ne
+# sert qu'a mettre a jour le clone local entre deux deploiements.
 if [ -z "$GIT" ]; then
-    log "ERREUR : git est introuvable sur ce NAS."
-    log "        Installer le paquet Git (Centre de paquets), puis relancer."
-    log "        Si git est installe mais invisible :"
-    log "          sudo ln -s /usr/local/git/bin/git /usr/bin/git"
-    exit 1
+    if depot_est_clone "$REPO_DIR"; then
+        log "AVERTISSEMENT : git absent du NAS, le depot local ne sera pas mis a jour."
+    else
+        log "AVERTISSEMENT : git absent du NAS et aucun depot local."
+        log "                Le deploiement continue : l'image va cloner"
+        log "                directement le depot GitHub."
+    fi
+    log "                Pour retablir les mises a jour automatiques, installer"
+    log "                le paquet Git depuis le Centre de paquets."
+    log ""
+else
+    log "Git : $GIT ($($GIT --version 2>/dev/null | head -1))"
 fi
-log "Git : $GIT ($($GIT --version 2>/dev/null | head -1))"
 
 BRANCH="${GITHUB_BRANCH:-main}"
 
-if depot_est_clone "$REPO_DIR"; then
+if [ -n "$GIT" ] && depot_est_clone "$REPO_DIR"; then
     log "Mise a jour du depot..."
     cd "$REPO_DIR" || exit 1
     "$GIT" fetch origin "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
@@ -64,16 +74,14 @@ if depot_est_clone "$REPO_DIR"; then
     fi
 
     log "Nouveaux commits : ${LOCAL:0:8} -> ${REMOTE:0:8}"
-    log "Récupération..."
+    log "Recuperation..."
     "$GIT" checkout "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
     "$GIT" pull --ff-only origin "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
 else
-    log "ATTENTION : $REPO_DIR n'est pas un clone git."
-    log "           Le depot distant sera utilise tel quel pour la construction."
-    log "           Pour activer les mises a jour automatiques, cloner une fois :"
-    log "             cd $REPO_DIR && $GIT clone <url-du-depot>"
+    log "Construction depuis le depot GitHub ($GITHUB_REPO, branche $BRANCH)."
+    log "Pour activer les mises a jour automatiques, cloner une fois :"
+    log "  cd $REPO_DIR && git clone <url-du-depot>"
     log ""
-    log "Reconstruction de l'image depuis GitHub..."
 fi
 
 log "Arrêt des conteneurs..."
