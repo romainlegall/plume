@@ -103,5 +103,5 @@ sleep 5
 log "Journaux du conteneur..."
 docker-compose --env-file "$COMPOSE_DIR/env.production" -f "$COMPOSE_DIR/docker-compose.yml" logs --tail=30 2>&1 | tee -a "$LOG_FILE"
 
-log "Deploiement termine. plume devrait repondre sur le port 3003."
+log "Deploiement termine. plume devrait repondre sur le port 3004."
 log "=== Fin : $(date) ==="

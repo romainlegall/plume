@@ -84,7 +84,7 @@ Ou, une fois le depot clone sur le NAS :
 ./server/deploy.sh
 ```
 
-L'application répond alors sur `http://<ip-du-nas>:3003`.
+L'application répond alors sur `http://<ip-du-nas>:3004`.
 
 ---
 
@@ -132,7 +132,8 @@ adaptez `REPO_DIR` si vous le clonez dans un sous-dossier.
 
 ## À savoir
 
-**Le port.** `plume` occupe le port 3003. `gestion_locative` utilise 3002.
+**Le port.** `plume` occupe le port 3004 ; le 3003 etait deja occupe sur le
+NAS. `gestion_locative` utilise 3002.
 
 **La base est partagée.** `plume_production` vit dans le conteneur
 `shared_postgres_db`, aux côtés de `gestion_locative_production` et

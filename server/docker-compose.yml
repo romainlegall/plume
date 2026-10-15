@@ -36,7 +36,7 @@ services:
       - /volume1/docker/plume/data:/data
       - /volume1/docker/plume/mbox:/mbox:ro
     ports:
-      - "3003:3000"
+      - "3004:3000"
     networks:
       - shared-database_default
     restart: unless-stopped
