@@ -41,9 +41,20 @@ WORKDIR /app
 # Les gems sont compiles une fois pour toutes ici : le rebuild ne les refait pas.
 RUN bundle install --jobs 4 --retry 3
 
+# L'ordre compte : Tailwind doit produire app/assets/builds/tailwind.css AVANT
+# que Propshaft ne calcule son manifeste. Sinon le fichier existe mais reste
+# invisible, et la page renvoie 500 sur une feuille de style introuvable.
+RUN SECRET_KEY_BASE_DUMMY=1 ./bin/rails tailwindcss:build
 RUN SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile
 
-COPY server/entrypoint.sh /usr/bin/entrypoint.sh
+# Controle de non-regression : si la feuille disparait du manifeste, le build
+# echoue ici plutot qu'a la premiere visite de l'application.
+RUN test -f public/assets/.manifest.json && grep -q 'tailwind.css' public/assets/.manifest.json \
+    || (echo "ERREUR : tailwind.css absent du manifeste des assets" && exit 1)
+
+# Le contexte de build est le dossier server/ lui-meme (compose : context: .) :
+# il ne contient que l'entrypoint. Le code applicatif arrive par le clone.
+COPY entrypoint.sh /usr/bin/entrypoint.sh
 RUN chmod +x /usr/bin/entrypoint.sh
 
 EXPOSE 3000
