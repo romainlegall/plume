@@ -30,6 +30,8 @@ charger_env() {
 
 log "=== Deploiement plume : $(date) ==="
 
+# GIT_BIN est lu avant tout : s'il est renseigne dans env.production, il prime
+# sur la recherche automatique.
 if ! charger_env; then
     log "ERREUR : $COMPOSE_DIR/env.production est absent ou illisible."
     log "        cp $COMPOSE_DIR/env.production.example $COMPOSE_DIR/env.production"
