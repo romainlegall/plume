@@ -22,7 +22,7 @@ gem "mail", "~> 2.9"
 
 
 # Pagination des listes de messages
-gem "pagy", "~> 9.0"
+gem "pagy", "~> 43.7"
 
 # Assainissement du HTML des messages avant affichage
 gem "loofah", "~> 2.24"
