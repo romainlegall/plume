@@ -74,8 +74,8 @@ En SSH sur le NAS :
 
 ```bash
 cd /volume1/docker/plume
-docker-compose --env-file ./server/env.production -f ./server/docker-compose.yml build --no-cache
-docker-compose --env-file ./server/env.production -f ./server/docker-compose.yml up -d
+docker-compose -p plume --env-file ./server/env.production -f ./server/docker-compose.yml build --no-cache
+docker-compose -p plume --env-file ./server/env.production -f ./server/docker-compose.yml up -d
 ```
 
 Ou, une fois le depot clone sur le NAS :

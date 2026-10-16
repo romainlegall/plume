@@ -12,6 +12,7 @@
 REPO_DIR="/volume1/docker/plume"
 COMPOSE_DIR="$REPO_DIR/server"
 LOG_FILE="$REPO_DIR/deploy.log"
+COMPOSE="docker-compose -p plume --env-file $COMPOSE_DIR/env.production -f $COMPOSE_DIR/docker-compose.yml"
 
 # shellcheck source=/volume1/docker/plume/server/lib.sh
 . "$COMPOSE_DIR/lib.sh"
@@ -85,10 +86,10 @@ else
 fi
 
 log "Arrêt des conteneurs..."
-docker-compose --env-file "$COMPOSE_DIR/env.production" -f "$COMPOSE_DIR/docker-compose.yml" down 2>&1 | tee -a "$LOG_FILE"
+$COMPOSE down 2>&1 | tee -a "$LOG_FILE"
 
 log "Reconstruction de l'image (plusieurs minutes sur Synology)..."
-docker-compose --env-file "$COMPOSE_DIR/env.production" -f "$COMPOSE_DIR/docker-compose.yml" build --no-cache 2>&1 | tee -a "$LOG_FILE"
+$COMPOSE build --no-cache 2>&1 | tee -a "$LOG_FILE"
 
 if [ ${PIPESTATUS[0]:-0} -ne 0 ]; then
     log "ERREUR : la construction a echoue. Voir les lignes ci-dessus."
@@ -97,11 +98,11 @@ if [ ${PIPESTATUS[0]:-0} -ne 0 ]; then
 fi
 
 log "Démarrage..."
-docker-compose --env-file "$COMPOSE_DIR/env.production" -f "$COMPOSE_DIR/docker-compose.yml" up -d 2>&1 | tee -a "$LOG_FILE"
+$COMPOSE up -d 2>&1 | tee -a "$LOG_FILE"
 
 sleep 5
 log "Journaux du conteneur..."
-docker-compose --env-file "$COMPOSE_DIR/env.production" -f "$COMPOSE_DIR/docker-compose.yml" logs --tail=30 2>&1 | tee -a "$LOG_FILE"
+$COMPOSE logs --tail=30 2>&1 | tee -a "$LOG_FILE"
 
 log "Deploiement termine. plume devrait repondre sur le port 3004."
 log "=== Fin : $(date) ==="

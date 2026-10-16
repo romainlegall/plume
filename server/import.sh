@@ -16,7 +16,7 @@ COMPOSE_FILE="$COMPOSE_DIR/docker-compose.yml"
 MBOX_FILE="${MBOX:-/mbox/emails.mbox}"
 BATCH="${LIMIT:-0}"
 
-COMPOSE="docker-compose --env-file $ENV_FILE -f $COMPOSE_FILE"
+COMPOSE="docker-compose -p plume --env-file $ENV_FILE -f $COMPOSE_FILE"
 
 # Les adresses servent a distinguer les messages que vous avez envoyes des
 # messages recus. Surchargeable : PLUME_OWN_ADDRESSES=... ./import.sh
