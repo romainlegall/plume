@@ -29,8 +29,8 @@ module MboxImport
     end
 
     def call
-      @conversations = Conversation.pluck(:gm_thr_id, :id).to_h
-      @labels = Label.pluck(:name, :id).to_h
+      preload_conversations
+      preload_labels
 
       batch = []
 
@@ -112,20 +112,44 @@ module MboxImport
       value.length > limit ? "#{value[0, limit]}…" : value
     end
 
+    # Seuls les identifiants sont memorises : 50 000 messages peuvent partager
+    # quelques milliers de conversations, et les recharger a chaque fois
+    # multiplierait les requetes par le nombre de messages.
+    def preload_conversations
+      @conversations = Conversation.pluck(:gm_thr_id, :id).to_h
+      @conversation_objects = {}
+    end
+
+    def preload_labels
+      @labels = Label.pluck(:name, :id).to_h
+      @label_objects = {}
+    end
+
+    # conversation_for et label_for doivent renvoyer des objets, jamais des
+    # identifiants. Le prechargement ne garde que des id pour rester leger ;
+    # un second cache recharge chaque enregistrement une seule fois.
     def conversation_for(parsed)
       key = parsed.gm_thr_id.presence ||
             "sans-fil-#{Digest::SHA1.hexdigest("#{parsed.from_raw}#{parsed.subject}")}"
+
       @conversations[key] ||= Conversation.create!(
         gm_thr_id: key,
         subject: parsed.subject,
         latest_at: parsed.sent_at
-      )
+      ).id
+
+      @conversation_objects[@conversations[key]] ||= Conversation.find(@conversations[key])
+    end
+
+    def label_for(name)
+      @labels[name] ||= Label.create!(name: name, slug: slug_for(name)).id
+
+      @label_objects[@labels[name]] ||= Label.find(@labels[name])
     end
 
     def attach_labels(message, label_names)
       label_names.each do |name|
-        label = @labels[name] ||= Label.create!(name: name, slug: slug_for(name))
-        message.message_labels.create!(label: label)
+        message.message_labels.create!(label: label_for(name))
       end
     end
 
