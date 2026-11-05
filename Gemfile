@@ -25,7 +25,7 @@ gem "mail", "~> 2.9"
 gem "pagy", "~> 9.0"
 
 # Assainissement du HTML des messages avant affichage
-gem "loofah", "~> 2.24"
+gem "loofah", "~> 2.25"
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem "tzinfo-data", platforms: %i[ windows jruby ]
