@@ -68,7 +68,7 @@ module MboxImport
     # l'archive : le regroupement est donc fidele a ce que Gmail affichait.
     def thread_id(mail)
       value = mail[:x_gm_thrid] || mail[:x_gm_thr_id]
-      value.to_s.strip.presence
+      sanitize_string(value).to_s.strip.presence
     rescue StandardError
       nil
     end
@@ -76,7 +76,7 @@ module MboxImport
     # Identifiant RFC 5322, quand l'archive en fournit un. Sert a reconnaitre
     # un message deja importe lors d'une reprise.
     def message_id(mail)
-      mail.message_id.to_s.strip.presence&.first(255)
+      sanitize_string(mail.message_id).to_s.strip.presence&.first(255)
     rescue StandardError
       nil
     end
@@ -84,9 +84,18 @@ module MboxImport
     def decode(value)
       return nil if value.nil?
 
-      Mail::Encodings.value_decode(value.to_s)
+      sanitize_string(Mail::Encodings.value_decode(value.to_s))
     rescue StandardError
-      value.to_s
+      sanitize_string(value)
+    end
+
+    # PostgreSQL refuse les octets nuls dans les colonnes texte, et une archive
+    # de 20 ans en contient quelques-uns. On les retire avant tout stockage :
+    # sans cela, l'import s'arrete net sur le premier message concerne.
+    def sanitize_string(value)
+      return nil if value.nil?
+
+      value.to_s.dup.force_encoding(Encoding::UTF_8).scrub("").delete("\u0000")
     end
 
     def truncate(value, limit)
@@ -177,7 +186,7 @@ module MboxImport
     def normalize(body)
       return nil if body.blank?
 
-      body.to_s.dup.force_encoding("UTF-8").scrub("").gsub(/\r\n?/, "\n").gsub(/\n{3,}/, "\n\n").strip.presence
+      body.to_s.dup.force_encoding("UTF-8").scrub("").delete("\u0000").gsub(/\r\n?/, "\n").gsub(/\n{3,}/, "\n\n").strip.presence
     end
 
     # Version texte d'un corps HTML, pour l'extrait affiche dans la liste.
