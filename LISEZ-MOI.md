@@ -106,6 +106,11 @@ Reprendre après une coupure :
 docker exec -it plume sh -c 'MBOX=/mbox/emails.mbox SKIP=12400 bin/rails mail:import'
 ```
 
+`SKIP` est une position dans l'archive (la colonne « messages » de la
+progression), pas le nombre de messages importés : les messages spam ou
+illisibles comptent aussi. Les messages déjà importés sont de toute façon
+ignorés, donc relancer sans `SKIP` ne crée pas de doublon.
+
 ---
 
 ## Mises à jour ensuite

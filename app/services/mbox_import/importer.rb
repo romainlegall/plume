@@ -15,7 +15,7 @@ module MboxImport
     PROGRESS_EVERY = 500
 
     Stats = Struct.new(
-      :total, :imported, :spam_skipped, :broken_skipped, :attachments, :bytes, :elapsed,
+      :total, :imported, :spam_skipped, :broken_skipped, :duplicates_skipped, :attachments, :bytes, :elapsed,
       keyword_init: true
     )
 
@@ -24,13 +24,17 @@ module MboxImport
       @batch_size = batch_size
       @parser = MessageParser.new(own_addresses)
       @logger = logger
-      @stats = Stats.new(total: 0, imported: 0, spam_skipped: 0, broken_skipped: 0, attachments: 0, bytes: 0, elapsed: 0.0)
+      @stats = Stats.new(
+        total: 0, imported: 0, spam_skipped: 0, broken_skipped: 0,
+        duplicates_skipped: 0, attachments: 0, bytes: 0, elapsed: 0.0
+      )
       @started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     end
 
     def call
       preload_conversations
       preload_labels
+      preload_seen_messages
 
       batch = []
 
@@ -52,7 +56,7 @@ module MboxImport
       end
 
       persist(batch) if batch.any?
-      @stats.total = @stats.imported + @stats.spam_skipped + @stats.broken_skipped
+      @stats.total = @stats.imported + @stats.spam_skipped + @stats.broken_skipped + @stats.duplicates_skipped
       recalculate_conversations
 
       @stats.elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - @started
@@ -83,8 +87,16 @@ module MboxImport
     end
 
     def store(parsed)
+      digest = fingerprint(parsed)
+      if seen?(parsed.message_id, digest)
+        @stats.duplicates_skipped += 1
+        return
+      end
+
       conversation = conversation_for(parsed)
       message = conversation.messages.create!(
+        message_id: parsed.message_id,
+        source_digest: digest,
         sent_at: parsed.sent_at,
         subject: parsed.subject,
         from_name: truncate(parsed.from_name, 200),
@@ -103,8 +115,34 @@ module MboxImport
       attach_labels(message, parsed.labels)
       store_attachments(message, parsed.attachments)
 
+      remember(parsed.message_id, digest)
       @stats.imported += 1
       message
+    end
+
+    def fingerprint(parsed)
+      Fingerprint.call(
+        sent_at: parsed.sent_at,
+        from_email: parsed.from_email,
+        subject: parsed.subject,
+        to_raw: parsed.to_raw,
+        cc_raw: parsed.cc_raw,
+        body_text: parsed.body_text,
+        body_html: parsed.body_html
+      )
+    end
+
+    # Un message deja present (meme Message-ID, ou meme contenu quand
+    # l'identifiant manque) est ignore : relancer un import, meme avec un SKIP
+    # trop petit, ne cree donc jamais de doublon.
+    def seen?(message_id, digest)
+      @seen_digests.include?(digest) ||
+        (message_id.present? && @seen_message_ids.include?(message_id))
+    end
+
+    def remember(message_id, digest)
+      @seen_digests << digest
+      @seen_message_ids << message_id if message_id.present?
     end
 
     def truncate(value, limit)
@@ -123,6 +161,11 @@ module MboxImport
     def preload_labels
       @labels = Label.pluck(:name, :id).to_h
       @label_objects = {}
+    end
+
+    def preload_seen_messages
+      @seen_digests = Message.where.not(source_digest: nil).pluck(:source_digest).to_set
+      @seen_message_ids = Message.where.not(message_id: nil).pluck(:message_id).to_set
     end
 
     # conversation_for et label_for doivent renvoyer des objets, jamais des

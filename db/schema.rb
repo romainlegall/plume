@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_14_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_09_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -83,12 +83,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_14_000002) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.virtual "search_document", type: :tsvector, as: "to_tsvector('french'::regconfig, (((((((COALESCE(subject, ''::character varying))::text || ' '::text) || (COALESCE(from_name, ''::character varying))::text) || ' '::text) || (COALESCE(from_email, ''::character varying))::text) || ' '::text) || \"left\"(COALESCE(body_text, ''::text), 30000)))", stored: true
+    t.string "source_digest"
     t.index ["conversation_id", "sent_at"], name: "index_messages_on_conversation_id_and_sent_at"
     t.index ["conversation_id"], name: "index_messages_on_conversation_id"
     t.index ["is_read"], name: "index_messages_on_is_read"
     t.index ["message_id"], name: "index_messages_on_message_id"
     t.index ["search_document"], name: "index_messages_on_search_document", using: :gin
     t.index ["sent_at"], name: "index_messages_on_sent_at"
+    t.index ["source_digest"], name: "index_messages_on_source_digest"
     t.index ["subject"], name: "index_messages_on_subject_trgm", opclass: :gin_trgm_ops, using: :gin
   end
 

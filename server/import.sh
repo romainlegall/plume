@@ -31,12 +31,15 @@ if [ "$BATCH" != "0" ]; then
     echo "Import limite a $BATCH messages (test)."
 else
     echo "Import complet. Pour interrompre sans perdre : Ctrl-C"
-    echo "Pour reprendre apres coup : SKIP=<nombre deja traites> bash $0"
+    echo "Pour reprendre apres coup : SKIP=<position affichee dans la progression> bash $0"
 fi
 echo "Archive : $MBOX_FILE"
 echo
 
-# --skip : nombre de messages deja traites. 0 = partir du debut.
+# --skip : position dans l'archive (la colonne "messages" de la progression),
+# pas le nombre de messages importes : les spam et illisibles comptent aussi.
+# Les messages deja importes sont de toute facon ignores, donc un SKIP trop
+# petit ne cree pas de doublon.
 $COMPOSE exec -T web sh -c "MBOX=$MBOX_FILE SKIP=${SKIP:-0} LIMIT=$BATCH PLUME_OWN_ADDRESSES='$OWN' bin/rails mail:import"
 CODE=$?
 
@@ -45,7 +48,7 @@ if [ $CODE -eq 0 ]; then
     echo "Import termine."
     echo "Verification : $COMPOSE exec -T web bin/rails runner 'puts Conversation.count'"
 else
-    echo "Import interrompu (code $CODE). Reprenez avec SKIP=<messages deja traites>."
+    echo "Import interrompu (code $CODE). Reprenez avec SKIP=<position affichee>, ou simplement sans SKIP."
 fi
 
 exit $CODE

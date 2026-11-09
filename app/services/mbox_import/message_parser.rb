@@ -14,6 +14,7 @@ module MboxImport
     Parsed = Struct.new(
       :sent_at, :subject, :from_name, :from_email, :from_raw, :to_raw, :cc_raw,
       :body_text, :body_html, :labels, :attachments, :is_outgoing, :gm_thr_id, :snippet,
+      :message_id,
       keyword_init: true
     )
 
@@ -47,7 +48,8 @@ module MboxImport
         attachments: extract_attachments(mail, referenced_cids(html)),
         is_outgoing: outgoing?(mail),
         gm_thr_id: thread_id(mail),
-        snippet: Message.build_snippet(plain_source(parsed_text) || plain_source(plain_text_from_html(html)))
+        snippet: Message.build_snippet(plain_source(parsed_text) || plain_source(plain_text_from_html(html))),
+        message_id: message_id(mail)
       )
     end
 
@@ -67,6 +69,14 @@ module MboxImport
     def thread_id(mail)
       value = mail[:x_gm_thrid] || mail[:x_gm_thr_id]
       value.to_s.strip.presence
+    rescue StandardError
+      nil
+    end
+
+    # Identifiant RFC 5322, quand l'archive en fournit un. Sert a reconnaitre
+    # un message deja importe lors d'une reprise.
+    def message_id(mail)
+      mail.message_id.to_s.strip.presence&.first(255)
     rescue StandardError
       nil
     end

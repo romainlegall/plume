@@ -74,7 +74,10 @@ module MboxImport
           raw = raw.byteslice(newline + 1, raw.bytesize) if newline
           yield raw
 
-          pos = header_end
+          # Reprendre a la fin du message, pas au debut des en-tetes : quand
+          # l'en-tete depassait la fenetre de recherche, header_end valait
+          # start et le message etait rendu une seconde fois.
+          pos = message_end
         end
       end
     end
