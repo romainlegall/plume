@@ -11,8 +11,22 @@ module MboxImport
   # L'import est reprenable : relancer avec SKIP egal au nombre de messages
   # deja traites reprend la ou l'execution s'etait arretee.
   class Importer
-    DEFAULT_BATCH = 500
+    DEFAULT_BATCH = 200
     PROGRESS_EVERY = 500
+    # Un lot est aussi ferme des qu'il depasse cette taille : une seule
+    # transaction ne doit pas retenir des centaines de Mo de corps et de
+    # pieces jointes, sinon le NAS peut manquer de memoire en pleine import.
+    MAX_BATCH_BYTES = 32 * 1024 * 1024
+    # La base est partagee avec d'autres applications : un redemarrage de
+    # PostgreSQL peut couper la connexion en cours. On se reconnecte et on
+    # rejoue le lot (la transaction a ete annulee, donc rien n'est perdu).
+    CONNECTION_ERRORS = [
+      ActiveRecord::ConnectionFailed,
+      ActiveRecord::ConnectionNotEstablished,
+      (PG::ConnectionBad if defined?(PG::ConnectionBad))
+    ].compact.freeze
+    MAX_RETRIES = 5
+    RETRY_DELAY = 5
 
     Stats = Struct.new(
       :total, :imported, :spam_skipped, :broken_skipped, :duplicates_skipped, :attachments, :bytes, :elapsed,
@@ -37,6 +51,7 @@ module MboxImport
       preload_seen_messages
 
       batch = []
+      batch_bytes = 0
 
       @reader.each_message do |mail, position|
         if mail.nil?
@@ -45,11 +60,15 @@ module MboxImport
         end
 
         parsed = parse(mail)
-        batch << parsed if parsed
+        if parsed
+          batch << parsed
+          batch_bytes += message_size(parsed)
+        end
 
-        if batch.size >= @batch_size
+        if batch.size >= @batch_size || batch_bytes >= MAX_BATCH_BYTES
           persist(batch)
           batch = []
+          batch_bytes = 0
         end
 
         report(position) if (position % PROGRESS_EVERY).zero?
@@ -81,9 +100,46 @@ module MboxImport
     def persist(batch)
       return if batch.empty?
 
-      Message.transaction do
-        batch.each { |parsed| store(parsed) }
+      snapshot = @stats.to_h
+      attempts = 0
+      reload = false
+
+      begin
+        reload_caches if reload
+        Message.transaction do
+          batch.each { |parsed| store(parsed) }
+        end
+      rescue *CONNECTION_ERRORS => e
+        attempts += 1
+        raise if attempts > MAX_RETRIES
+
+        # La transaction a ete annulee : les compteurs, les ids crees et les
+        # empreintes memorisees depuis le debut du lot sont faux.
+        @stats = Stats.new(**snapshot)
+        reload = true
+        debug("base injoignable (#{e.class}), reconnexion dans #{RETRY_DELAY}s (essai #{attempts}/#{MAX_RETRIES})")
+        sleep(RETRY_DELAY)
+        reconnect!
+        retry
       end
+    end
+
+    def reconnect!
+      ActiveRecord::Base.connection_pool.disconnect!
+    rescue StandardError
+      nil
+    end
+
+    def reload_caches
+      preload_conversations
+      preload_labels
+      preload_seen_messages
+    end
+
+    def message_size(parsed)
+      parsed.body_text.to_s.bytesize +
+        parsed.body_html.to_s.bytesize +
+        parsed.attachments.sum { |attachment| attachment.data.bytesize }
     end
 
     def store(parsed)
