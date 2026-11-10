@@ -159,7 +159,8 @@ module MboxImport
     end
 
     def preload_labels
-      @labels = Label.pluck(:name, :id).to_h
+      @label_ids_by_name = Label.pluck(:name, :id).to_h
+      @label_ids_by_slug = Label.pluck(:slug, :id).to_h
       @label_objects = {}
     end
 
@@ -184,14 +185,30 @@ module MboxImport
       @conversation_objects[@conversations[key]] ||= Conversation.find(@conversations[key])
     end
 
+    # Le slug est l'identite d'une etiquette (index unique), pas son nom : Gmail
+    # fournit parfois deux libelles qui se normalisent pareil, par exemple
+    # "IMAP_$Forwarded" et "IMAP_Forwarded". On reutilise alors l'etiquette
+    # existante au lieu d'en creer une seconde qui violerait l'unicite.
     def label_for(name)
-      @labels[name] ||= Label.create!(name: name, slug: slug_for(name)).id
+      return @label_objects[name] if @label_objects.key?(name)
 
-      @label_objects[@labels[name]] ||= Label.find(@labels[name])
+      slug = slug_for(name)
+      id = @label_ids_by_name[name] || @label_ids_by_slug[slug]
+      if id
+        label = Label.find(id)
+      else
+        label = Label.create!(name: name, slug: slug)
+        @label_ids_by_name[name] = label.id
+        @label_ids_by_slug[slug] = label.id
+      end
+
+      @label_objects[name] = label
     end
 
     def attach_labels(message, label_names)
-      label_names.each do |name|
+      # Deux libelles peuvent viser le meme slug : sans ce filtre, on creerait
+      # deux fois le meme lien message/etiquette.
+      label_names.uniq { |name| slug_for(name) }.each do |name|
         message.message_labels.create!(label: label_for(name))
       end
     end
