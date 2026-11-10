@@ -25,7 +25,7 @@ module MboxImport
       ActiveRecord::ConnectionNotEstablished,
       (PG::ConnectionBad if defined?(PG::ConnectionBad))
     ].compact.freeze
-    MAX_RETRIES = 5
+    MAX_RETRIES = 8
     RETRY_DELAY = 5
 
     Stats = Struct.new(
@@ -54,6 +54,7 @@ module MboxImport
       batch_bytes = 0
 
       @reader.each_message do |mail, position|
+        @position = position
         if mail.nil?
           @stats.broken_skipped += 1
           next
@@ -117,8 +118,9 @@ module MboxImport
         # empreintes memorisees depuis le debut du lot sont faux.
         @stats = Stats.new(**snapshot)
         reload = true
-        debug("base injoignable (#{e.class}), reconnexion dans #{RETRY_DELAY}s (essai #{attempts}/#{MAX_RETRIES})")
-        sleep(RETRY_DELAY)
+        delay = [ RETRY_DELAY * attempts, 30 ].min
+        debug("base injoignable (#{e.class}) vers le message #{@position}, reconnexion dans #{delay}s (essai #{attempts}/#{MAX_RETRIES})")
+        sleep(delay)
         reconnect!
         retry
       end
