@@ -27,6 +27,7 @@ module MboxImport
     ].compact.freeze
     MAX_RETRIES = 8
     RETRY_DELAY = 5
+    EMPTY_SET = Set.new.freeze
 
     Stats = Struct.new(
       :total, :imported, :spam_skipped, :broken_skipped, :duplicates_skipped, :attachments, :bytes, :elapsed,
@@ -145,8 +146,18 @@ module MboxImport
     end
 
     def store(parsed)
-      digest = fingerprint(parsed)
-      if seen?(parsed.message_id, digest)
+      from_email = truncate(parsed.from_email, 320)
+      digest = fingerprint(parsed, from_email)
+      content_digest = Fingerprint.content(
+        from_email: from_email,
+        subject: parsed.subject,
+        to_raw: parsed.to_raw,
+        cc_raw: parsed.cc_raw,
+        body_text: parsed.body_text,
+        body_html: parsed.body_html
+      )
+
+      if seen?(parsed.message_id, digest, content_digest)
         @stats.duplicates_skipped += 1
         return
       end
@@ -155,10 +166,11 @@ module MboxImport
       message = conversation.messages.create!(
         message_id: parsed.message_id,
         source_digest: digest,
+        content_digest: content_digest,
         sent_at: parsed.sent_at,
         subject: parsed.subject,
         from_name: truncate(parsed.from_name, 200),
-        from_email: truncate(parsed.from_email, 320),
+        from_email: from_email,
         from_raw: parsed.from_raw,
         to_raw: parsed.to_raw,
         cc_raw: parsed.cc_raw,
@@ -173,15 +185,15 @@ module MboxImport
       attach_labels(message, parsed.labels)
       store_attachments(message, parsed.attachments)
 
-      remember(parsed.message_id, digest)
+      remember(parsed.message_id, digest, content_digest)
       @stats.imported += 1
       message
     end
 
-    def fingerprint(parsed)
+    def fingerprint(parsed, from_email)
       Fingerprint.call(
         sent_at: parsed.sent_at,
-        from_email: parsed.from_email,
+        from_email: from_email,
         subject: parsed.subject,
         to_raw: parsed.to_raw,
         cc_raw: parsed.cc_raw,
@@ -190,17 +202,29 @@ module MboxImport
       )
     end
 
-    # Un message deja present (meme Message-ID, ou meme contenu quand
-    # l'identifiant manque) est ignore : relancer un import, meme avec un SKIP
-    # trop petit, ne cree donc jamais de doublon.
-    def seen?(message_id, digest)
-      @seen_digests.include?(digest) ||
-        (message_id.present? && @seen_message_ids.include?(message_id))
+    # Un message deja present est ignore : relancer un import, meme avec un SKIP
+    # trop petit, ne cree donc jamais de doublon. L'empreinte complete ne suffit
+    # pas quand l'en-tete Date manque (le gem mail invente alors l'heure
+    # courante) ; on compare alors le contenu a message_id egal. Deux messages
+    # distincts qui partagent un Message-ID mais pas leur contenu restent, eux,
+    # bien importes.
+    def seen?(message_id, digest, content_digest)
+      return true if @seen_digests.include?(digest)
+
+      if message_id.present?
+        @seen_content_by_mid.fetch(message_id, EMPTY_SET).include?(content_digest)
+      else
+        @seen_content_without_mid.include?(content_digest)
+      end
     end
 
-    def remember(message_id, digest)
+    def remember(message_id, digest, content_digest)
       @seen_digests << digest
-      @seen_message_ids << message_id if message_id.present?
+      if message_id.present?
+        (@seen_content_by_mid[message_id] ||= Set.new) << content_digest
+      else
+        @seen_content_without_mid << content_digest
+      end
     end
 
     def truncate(value, limit)
@@ -224,7 +248,13 @@ module MboxImport
 
     def preload_seen_messages
       @seen_digests = Message.where.not(source_digest: nil).pluck(:source_digest).to_set
-      @seen_message_ids = Message.where.not(message_id: nil).pluck(:message_id).to_set
+      @seen_content_by_mid = {}
+      Message.where.not(message_id: nil).where.not(content_digest: nil)
+             .pluck(:message_id, :content_digest).each do |message_id, content_digest|
+        (@seen_content_by_mid[message_id] ||= Set.new) << content_digest
+      end
+      @seen_content_without_mid = Message.where(message_id: nil).where.not(content_digest: nil)
+                                        .pluck(:content_digest).to_set
     end
 
     # conversation_for et label_for doivent renvoyer des objets, jamais des

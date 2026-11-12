@@ -147,10 +147,30 @@ module MboxImport
     end
 
     def sent_at(mail)
-      date = mail.date
-      return mail.received.first&.at if date.blank? && mail.received.any?
+      date = date_header(mail)
+      return received_at(mail) if date.blank?
 
       date
+    rescue StandardError
+      nil
+    end
+
+    # Le gem mail renvoie un champ seul quand il n'y a qu'un en-tete Received,
+    # et un tableau quand il y en a plusieurs.
+    def received_at(mail)
+      Array(mail[:received]).first&.date_time
+    rescue StandardError
+      nil
+    end
+
+    # Un en-tete Date present mais vide fait renvoyer l'heure courante par le
+    # gem mail : l'empreinte changerait a chaque import. On le traite comme
+    # absent et on se rabat sur l'en-tete Received.
+    def date_header(mail)
+      field = mail[:date]
+      return nil unless field && field.unparsed_value.present?
+
+      field.date_time
     rescue StandardError
       nil
     end

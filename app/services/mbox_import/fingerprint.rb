@@ -13,7 +13,7 @@ module MboxImport
     module_function
 
     def call(sent_at:, from_email:, subject:, to_raw:, cc_raw:, body_text:, body_html:)
-      canonical = [
+      digest([
         timestamp(sent_at),
         from_email,
         subject,
@@ -21,8 +21,17 @@ module MboxImport
         cc_raw,
         body_text,
         body_html
-      ].map { |value| value.to_s }.join(SEPARATOR)
+      ])
+    end
 
+    # Identite de contenu, sans la date : une copie du meme message dont
+    # l'en-tete Date manque ne doit pas etre prise pour un nouveau message.
+    def content(from_email:, subject:, to_raw:, cc_raw:, body_text:, body_html:)
+      digest([ from_email, subject, to_raw, cc_raw, body_text, body_html ])
+    end
+
+    def digest(parts)
+      canonical = parts.map { |value| value.to_s }.join(SEPARATOR)
       Digest::SHA256.hexdigest(canonical)
     end
 
